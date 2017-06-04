@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+</head>
+
+<body>
+    <script type="text/html" id="content">
+        <%if true>
+            123
+        <%endif>
+        <%each [1,2,3] item index "this.item>2" >
+            {{item}}
+        <%endeach>
+    </script>
+    <script src="require.js"></script>
+    <script>
+        require(['jquery', 'lazy'], function ($, Ø) {
+            var content = $('#content').html()
+
+            var TreeDataCreator = function () {
+                this.treeData = {};
+            };
+            TreeDataCreator.prototype.analysis = function () {
+                analysis = function () {
+
+                }
+            };
+            TreeDataCreator.prototype.getData = function () {
+                return treeData;
+            };
+
+
+            var transformTreeData = function (treeData, contextHandler) {
+
+            };
+
+
+            var ContextHandler = function (context) {
+                this.context = context;
+                this.contextDetail = {};
+                this.index = 0;
+                this.listDataAnalysis = function (dataExpression) {
+                    if (!dataExpression) {
+                        return false;
+                    }
+                    var cuteSpaceResult = utils.spaceCut(dataExpression)
+                    var remainStr = cuteSpaceResult[2];
+                    if (!remainStr) {
+                        return false;
+                    }
+                    if ("[" || "{" === remainStr.charAt(0)) {
+                        try {
+                            return eval(remainStr);
+                        } catch (e) {
+                            return false;
+                        }
+                    } else {
+                        return remainStr;
+                    }
+                };
+            };
+            ContextHandler.prototype.eval = function () {
+
+            };
+            ContextHandler.prototype.startLoop = function (dataExpression, name, indexName, filter) {
+                var index = ++index;
+                var expressionResult = this.listDataAnalysis(dataExpression);
+                if (!expressionResult) {
+                    return false;
+                } else if (expressionResult instanceof String) {
+
+                    //说明是原有引用
+                } else {
+                    //List
+                    if (expressionResult instanceof Array) {
+                        this.contextDetail["data_self_"+i]={
+                            iterator:expressionResult[Symbol.iterator](),
+                        };
+                        if(name){
+                           item:["data_self_"+i] 
+                        }
+                        if(indexName){
+
+                        }
+                    }
+                    //Object
+                    else {
+
+                    }
+                }
+                return index;
+            };
+            ContextHandler.prototype.toNext = function () {
+
+            };
+            ContextHandler.prototype.endLoop = function () {
+
+            };
+
+            //str必须为非空
+            var utils = {
+                spaceCut: function (str) {
+                    return str.match(/(\s)*([^\s](?:.|\s)*)?/);
+                }
+            };
+            console.log(utils.spaceCut("123"));
+        })
+    </script>
+</body>
+
+</html>
