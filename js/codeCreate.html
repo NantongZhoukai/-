@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+</head>
+
+<body>
+    <script src="require.js"></script>
+    <script>
+        require(["jquery", "underscore"], function ($, _) {
+            var orange = (function () {
+                const reg1 = /^\*\s*(\d+)(.*)/;
+                const reg2 = /[>+]|[(+]/;
+                const reg3 = /^(input|div|span|option|label|img|h1|h2|h3|h4|h5|h6|a|table|select|tbody|td|tr|th|li|ul|ol)\s*(\.[A-Za-z0-9]+)?\s*(\[[^\]]*)?\s*.*/;
+                const reg4 = /.*(@R_\d+).*/;
+                var orange = function () {
+                    this.expression_str = null;
+                    this.temp_expression_str = null;
+                    this.replaced_expression_str = null;
+                    //需要解释的表达式
+                    //表达式内 单双 引号 内 值的索引
+                    //注:只处理 两个[ ] 中间的 单双引号
+                    //假如单 双 引号 之前 没有= 号 那么该字符串无效 
+                    //需要替换的字符换 标记为 @R_+id
+                    this.var_str_map = null;
+                    this.data_arr = null;
+                    this.treeObject = null;
+                    this.result_str = null;
+                };
+                orange.prototype.express = function (expression) {
+                    if (!expression) {
+                        return "";
+                    }
+                    this.expression_str = expression;
+                    this.prepare();
+                    console.log(this.replaced_expression_str)
+                    this.analysis();
+                    console.log(this.treeObject);
+                    this.createHtml();
+                    console.log(this.result_str);
+                };
+                orange.prototype.prepare = function () {
+                    //提取表达式中[]中有效的 单双引号
+                    this.create_var_str_map();
+                    //预处理一些 th*3   input*3 字段  修改为 (th)*3  (input)*3 方便之后统一处理
+                    this.handle_for_multi();
+                }
+                orange.prototype.analysis = function () {
+                    this.data_arr = [];
+                    this.analysis_deep('basic', this.replaced_expression_str, 'root', 'first');
+                    this.treeObject = {};
+                    this.createLinkObjectTree();
+
+                }
+                orange.prototype.createHtml = function () {
+                    var root = this.treeObject["basic"];
+                    var createOneLevel = function (currentNode) {
+                        if (!currentNode) return;
+                        var isReplace = currentNode.isReplace;
+                        if (isReplace) {
+                            var currentHtmlContent = createOneLevel.call(this, this.treeObject[currentNode.innerId]);
+                            currentHtmlContent = replaceContent.call(this, currentHtmlContent);
+                            if (currentNode.repeat && currentNode.repeat > 1)
+                                currentHtmlContent = currentHtmlContent.repeat(currentNode.repeat);
+                            return currentHtmlContent;
+                        } else {
+                            var content = currentNode.content;
+                            if (!content) return;
+                            var expressions = $.trim(content).split("+");
+                            var canAddChild = false;
+                            var currentHtmlContent = "";
+                            if (expressions && expressions.length > 0) {
+                                for (var i = 0, length = expressions.length; i < length; i++) {
+                                    var content_ = expressions[i];
+                                    if (!$.trim(content_)) continue;
+                                    var resultObject = singleExpressionAnalysisAndCreate(content_);
+                                    canAddChild = resultObject.canAddChild;
+                                    currentHtmlContent += resultObject.data;
+                                }
+                            }
+                            var childs = currentNode.child;
+                            var childContent = "";
+                            if (childs && childs.length > 0) {
+                                for (var i = 0, length = childs.length; i < length; i++) {
+                                    childContent += createOneLevel.call(this, childs[i]);
+                                }
+                                currentHtmlContent = replace_mark(currentHtmlContent, "@C", [childContent]);
+                            } else {
+                                currentHtmlContent = replace_mark(currentHtmlContent, "@C", [""]);
+                            }
+                            currentHtmlContent = replaceContent.call(this, currentHtmlContent);
+                            if (currentNode.repeat && currentNode.repeat > 1)
+                                currentHtmlContent = currentHtmlContent.repeat(currentNode.repeat);
+                            return currentHtmlContent;
+                        }
+
+                    };
+                    var replaceContent = function (content) {
+                        if (!$.trim(content)) return "";
+                        if (reg4.test(content)) {
+                            var mark = content.match(reg4)[1];
+                            content = replace_mark(content, mark, [`"${this.var_str_map[mark]}"`]);
+                        }
+                        return content;
+                    }
+                    var singleExpressionAnalysisAndCreate = function (expression) {
+                        if (reg3.test(expression)) {
+                            var data_Arr = [].slice.call(expression.match(reg3), 1, 4);
+                            return { canAddChild: true, data: createDetail(data_Arr) }
+                        } else {
+                            return { canAddChild: false, data: expression };
+                        }
+                    };
+                    var createDetail = function (data_arr) {
+                        if (!data_arr || !data_arr[0]) return "";
+                        var returnString = "";
+                        var classStr = "";
+                        if (data_arr[1]) {
+                            classStr = ` class='${data_arr[1].substring(1)}' `;
+                        }
+                        return `<${data_arr[0]} ${classStr} ${data_arr[2] ? (data_arr[2] + "").substring(1) : ""}>@C</${data_arr[0]}>`;
+                    }
+                    this.result_str = createOneLevel.call(this, root)
+                }
+                orange.prototype.create_var_str_map = function () {
+                    this.temp_expression_str = this.expression_str;
+                    this.replaced_expression_str = "";
+                    this.var_str_map = {};
+                    this.create_var_str_map_bystep();
+                    //合理的结束 都是 从 type ===0 进入 然后找不到 [ 出来
+                }
+                //type 表示下个需要开始寻找的符号  
+                //0:[  1:开始的'或者"   2:结束的'或者"    3:结束的]
+                //type1 表示 是 2时寻找的是单引号:0 还是 双引号:1
+                orange.prototype.create_var_str_map_bystep = function (type0 = 0, type1) {
+                    var index;
+                    switch (type0) {
+                        //找得到 进入 1 找不到 结束
+                        case 0:
+                            if (~(index = this.temp_expression_str.indexOf("["))) {
+                                var head_str = this.temp_expression_str.substring(0, index + 1);
+                                this.temp_expression_str = this.temp_expression_str.substring(index + 1);
+                                this.replaced_expression_str += head_str;
+                                this.create_var_str_map_bystep(1);
+                            } else {
+                                this.replaced_expression_str += this.temp_expression_str;
+                            }
+                            break;
+                        //找的到进入  2 找不到 进入 3
+                        case 1:
+                            var index_arr = find_nearest_mark(this.temp_expression_str, "'", "\"")
+                            var index_ = index_arr[0];
+                            index = index_arr[1];
+                            if (index_ === 0) {
+                                //注意这里的 index 不是 index+1  不需要吧' 或者 " 加入  replaced_expression_str
+                                var head_str = this.temp_expression_str.substring(0, index);
+                                //同样余下的字符串 也不需要 这个单引号或者 双引号  最终结果都将 表示为 双引号 (出于格式统一好看的目的)
+                                //同样的 对于 "\"" '\"'  这两种会导致解析结果 出问题的情况 (可以人为修改表达式规避)不作考虑 所有的引用最后都将用 " 进行包裹
+                                this.temp_expression_str = this.temp_expression_str.substring(index + 1);
+                                this.replaced_expression_str += head_str;
+                                this.create_var_str_map_bystep(2, 0);
+                            } else if (index_ === 1) {
+                                var head_str = this.temp_expression_str.substring(0, index);
+                                this.temp_expression_str = this.temp_expression_str.substring(index + 1);
+                                this.replaced_expression_str += head_str;
+                                this.create_var_str_map_bystep(2, 1);
+                            } else {
+                                this.create_var_str_map_bystep(3);
+                            }
+                            break;
+                        //找不到 报错  找得到 替换
+                        case 2:
+                            var next_mark = type1 === 1 ? "\"" : "'";
+                            if (~(index = this.temp_expression_str.indexOf(next_mark))) {
+                                var head_str = this.temp_expression_str.substring(0, index);
+                                this.temp_expression_str = this.temp_expression_str.substring(index + 1);
+                                var name = _.uniqueId("@R_");
+                                this.var_str_map[name] = head_str;
+                                this.replaced_expression_str += name;
+                                this.create_var_str_map_bystep(3);
+                            } else {
+                                throw new Error("替换属性间固定字符串时 出现以下错误:找不到结束的" + next_mark);
+                            }
+                            break;
+                        //找不到 报错 找得到进入0
+                        case 3:
+                            if (~(index = this.temp_expression_str.indexOf("]"))) {
+                                var head_str = this.temp_expression_str.substring(0, index + 1);
+                                this.temp_expression_str = this.temp_expression_str.substring(index + 1);
+                                this.replaced_expression_str += head_str;
+                                this.create_var_str_map_bystep(0);
+                            } else {
+                                throw new Error("替换属性间固定字符串时 出现以下错误:找不到结束的]");
+                            }
+                            break;
+                    }
+                }
+                orange.prototype.handle_for_multi = function () {
+                    //去掉*前后的空格
+                    this.replaced_expression_str = this.replaced_expression_str.replace(/(\s*)(\*)(\s*)(\d)/g, "$2$4");
+                    //加上括号
+                    this.replaced_expression_str = this.replaced_expression_str.replace(/(input|div|span|option|label|img|h1|h2|h3|h4|h5|h6|a|table|select|tbody|td|tr|th|li|ul|ol)\*/g, "($1)*");
+                }
+                orange.prototype.analysis_deep = function (basicId, string, pId, prevId) {
+                    if (!(string = $.trim(string))) return;
+                    var id = _.uniqueId("id");
+                    var index_arr = find_nearest_mark(string, ">", "(");
+                    if (index_arr[0] === -1) {
+                        this.data_arr.push({
+                            basicId: basicId,
+                            id: id,
+                            pId: pId,
+                            prevId: prevId,
+                            content: string
+                        });
+                    } else if (index_arr[0] === 0) {
+                        var pieces = cut_str(string, index_arr[1]);
+                        this.data_arr.push({
+                            basicId: basicId,
+                            id: id,
+                            pId: pId,
+                            prevId: prevId,
+                            content: pieces[0]
+                        })
+                        this.analysis_deep(basicId, pieces[1], id, 'first');
+                    } else {
+                        var pieces = cut_str(string, index_arr[1]);
+                        if (pieces[0]) {
+                            this.data_arr.push({
+                                basicId: basicId,
+                                id: id,
+                                pId: pId,
+                                prevId: prevId,
+                                content: pieces[0]
+                            })
+                            this.analysis_bracket(basicId, pieces[1], pId, id);
+                        } else {
+                            this.analysis_bracket(basicId, pieces[1], pId, prevId);
+                        }
+                    }
+                }
+                orange.prototype.analysis_bracket = function (basicId, string, pId, prevId) {
+                    if (!(string = $.trim(string))) return;
+                    var deep = 1;
+                    var remainString = string;
+                    var sumIndex = 0;
+                    var id = _.uniqueId("id");
+                    var repeatTime = -1;
+                    while (true) {
+                        var index_arr = find_nearest_mark(remainString, ")", "(");
+                        if (index_arr[0] === 0) {
+                            deep--; sumIndex += index_arr[1]; repeatTime++;
+                            var pieces = cut_str(remainString, index_arr[1]);
+                            remainString = pieces[1];
+                        } else if (index_arr[0] === 1) {
+                            deep++; sumIndex += index_arr[1]; repeatTime++;
+                            var pieces = cut_str(remainString, index_arr[1]);
+                            remainString = pieces[1];
+                        }
+                        //breakCondition 1没有需要解析的字符串 2括号闭合 或者3 既找到不到 (也找不到 )退出
+                        if (!remainString || deep === 0 || index_arr[0] === -1) {
+                            break;
+                        }
+                    }
+                    //如果  deep!=0 退出 均为 异常
+                    if (deep != 0) {
+                        throw new Error("analysis_bracket Error: 找不到闭合 )");
+                    }
+                    var pieces = cut_str(string, sumIndex + repeatTime);
+                    var remainString = $.trim(pieces[1]);
+                    if ("*" == remainString[0]) {
+                        if (!reg1.test(remainString)) {
+                            throw new Error("analysis_bracket Error : *号后面需要连接着 int值 ");
+                        }
+                        var result = remainString.match(reg1);
+                        var number = result[1];
+                        var tailString = result[2];
+                        if (reg2.test(pieces[0])) {
+                            var innerMarkId = _.uniqueId("id");
+                            this.data_arr.push({
+                                basicId: basicId,
+                                isReplace: true,
+                                id: id,
+                                pId: pId,
+                                prevId: prevId,
+                                content: pieces[0],
+                                innerId: innerMarkId,
+                                repeat: number
+                            });
+                            this.analysis_deep(innerMarkId, pieces[0], 'root', 'first');
+                        } else {
+                            this.data_arr.push({
+                                basicId: basicId,
+                                id: id,
+                                pId: pId,
+                                prevId: prevId,
+                                content: pieces[0],
+                                repeat: number
+                            });
+                        }
+                        this.analysis_deep(basicId, tailString, pId, id);
+                    } else {
+                        if (reg2.test(pieces[0])) {
+                            var innerMarkId = util.UUID();
+                            this.data_arr.push({
+                                basicId: basicId,
+                                isReplace: true,
+                                id: id,
+                                pId: pId,
+                                prevId: prevId,
+                                innerId: innerMarkId,
+                                content: pieces[0]
+                            });
+                            this.analysis_deep(innerMarkId, pieces[0], 'root', 'first');
+                        } else {
+                            this.data_arr.push({
+                                basicId: basicId,
+                                id: id,
+                                pId: pId,
+                                prevId: prevId,
+                                content: pieces[0]
+                            });
+                        }
+                        this.analysis_deep(basicId, remainString, pId, id);
+                    }
+                }
+                orange.prototype.createLinkObjectTree = function () {
+                    var createLinkObjectArr = [];
+                    var ObjectAll = {};
+                    for (var i = 0, length = this.data_arr.length; i < length; i++) {
+                        ObjectAll[this.data_arr[i].id] = this.data_arr[i];
+                    }
+                    for (var key in ObjectAll) {
+                        if (ObjectAll[key].pId === "root") {
+                            this.treeObject[ObjectAll[key].basicId] = (ObjectAll[key]);
+                        } else {
+                            var currentItem = ObjectAll[key];
+                            var parentItem = ObjectAll[currentItem.pId];
+                            if (!parentItem.child) {
+                                parentItem.child = [];
+                            }
+                            parentItem.child.push(currentItem);
+                        }
+                    }
+                }
+                var find_nearest_mark = function (str) {
+                    var marks_arr = Array.prototype.slice.call(arguments, 1);
+                    //假如一个都找不到返回
+                    var result_index_int;
+                    var min_number;
+                    _.each(marks_arr, function (mark, index_) {
+                        var index = str.indexOf(mark);
+                        if (index == -1) return;
+                        if (result_index_int === undefined || index < min_number) {
+                            result_index_int = index_;
+                            min_number = index;
+                        }
+                    })
+                    return result_index_int === undefined ? [-1, null] : [result_index_int, min_number];
+                }
+                var cut_str = function (string, index) {
+                    return [string.substring(0, index), string.substring(index + 1, string.length)];
+                }
+                var replace_mark = function (text, mark, array) {
+                    var keys = array, i = 0;
+                    var reg = new RegExp(mark, "g");
+                    return text.replace(reg, function () {
+                        return (i < keys.length) ? keys[i++] : ""
+                    })
+                }
+                return orange;
+            })($, _)
+            //测试 
+            console.log("div>select.sss>(option[name='>dwa$^&*().']>li)*4")
+            var cute_orange = new orange();
+            cute_orange.express("div>select.sss>(option[name='>dwa$^&*().']>li)*4")
+            //结果输出:
+            //<div  ><select  class='sss'  ><option  name=">dwa$^&*()."><li  ></li></option><option  name=">dwa$^&*()."><li  ></li></option><option  name=">dwa$^&*()."><li  ></li></option><option  name=">dwa$^&*()."><li  ></li></option></select></div>
+        })
+    </script>
+
+</body>
+
+</html>
