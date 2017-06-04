@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+</head>
+
+<body>
+    #写一个模板生成引擎
+    ##代码主要包含3块功能
+    - treeObjectHandler 将js模板或者html模板解析成一个treeObject treeObject 主要有4种类型的数据
+    -- eval型
+    -- if型
+    -- loop型
+    -- 最基础的 stingr型
+    - conextHandler 表达式操作的环境 对面暴露如下接扣
+    -- setContext 基础上下文设置  
+    -- eval(arg) 根据arg执行 返回 (执行的this是 conextHandler.context  需要对一些赋值的 eval 进行简单的包装 桥接 数据 )
+    -- 然而我们需要遍历 list 或者 Object 额外有3个接口
+    --- startLoop(item,name,indexName,filter)  
+    #### 这里的item 可以是[1,2,3] 可以是 {name:'zk',age:13} 可以是  {{item}} (原有context中的对象)  暂定先不支持混合 为空直接跳过集合遍历
+         name 指的是 每个对象的 名称   可以用 _ 表示 不设置 可以用 '或者 "包裹 如果没有以空格分割
+         indexName 指的是 每个对象对于序号的名称 可以用 _表示不设置  可以用 '或者 "包裹 如果没有以空格分割
+         filter 指的是需要过滤的集合 我们可以这么写 this.name == '1'  或者 this.name eq '1 那么 在[1,2,3] 这个集合 只会遍历到 1
+     --- toNext(key)
+     ### 这里的key 是 startLoop 返回的对于一个list的标识 标识循环到下个元素  
+     --- endLoop(key)  
+     ### 同上 结束循环  暂时不支持 break 指定层次的 loop  (因为 这需要在初始化 loop时指定更多的参数 ,也不太常用)
+
+    - transformer 借助   treeObjectHandler 将treeObjectData 转换为 html 代码的场所
+    -------------------------------
+    #注意点
+    ####  是否需要考虑 无限循环的控制? 暂定为 不需要
+    ####  简单的注释支持 以 ^/s*# 开头的行过滤掉
+    ####  对于单双引号需要支持转义的处理 对于eval的表达式 必须有单双引号包裹 其他情况 <%if true><%if>   <%if 1><%if> 这种情况也是可以的
+    ####  可以用 _ 表示 不必要一些表达式 <%if _><%if> 为false
+    
+    <script type="text/html" id="content">
+    ###测试用模板
+        <%eval "this.testarr=[1,2,3]">
+        <%if "this.testarr[0]==1">
+            <%if 'this.testarr[1] eq \'2\''>
+                123
+            <%else>
+                456
+            <%if>
+            789
+        <%if>
+        <%each [1,2,[1,2,3]] item _ "this.item>2" >
+            2
+            <%each {{item}} >
+                1
+                <%eval break>
+                ##执行break
+            <%each>
+        <%each>
+    </script>
+    <script src="require.js"></script>
+    <script>
+        require(['jquery', 'lazy'], function ($, Ø) {
+            var content = $('#content').html()
+
+            var TreeDataCreator = function () {
+                this.treeData = {};
+            };
+            TreeDataCreator.prototype.analysis = function () {
+                analysis = function () {
+
+                }
+            };
+            TreeDataCreator.prototype.getData = function () {
+                return treeData;
+            };
+
+
+            var transformTreeData = function (treeData, contextHandler) {
+
+            };
+
+
+            var ContextHandler = function (context) {
+                this.context = context;
+                this.contextDetail = {};
+                this.index = 0;
+                this.listDataAnalysis = function (dataExpression) {
+                    if (!dataExpression) {
+                        return false;
+                    }
+                    var cuteSpaceResult = utils.spaceCut(dataExpression)
+                    var remainStr = cuteSpaceResult[2];
+                    if (!remainStr) {
+                        return false;
+                    }
+                    if ("[" || "{" === remainStr.charAt(0)) {
+                        try {
+                            return eval(remainStr);
+                        } catch (e) {
+                            return false;
+                        }
+                    } else {
+                        return remainStr;
+                    }
+                };
+            };
+            ContextHandler.prototype.eval = function () {
+
+            };
+            ContextHandler.prototype.startLoop = function (dataExpression, name, indexName, filter) {
+                var index = ++index;
+                var expressionResult = this.listDataAnalysis(dataExpression);
+                if (!expressionResult) {
+                    return false;
+                } else if (expressionResult instanceof String) {
+
+                    //说明是原有引用
+                } else {
+                    //List
+                    if (expressionResult instanceof Array) {
+                        this.contextDetail["data_self_"+i]={
+                            iterator:expressionResult[Symbol.iterator](),
+                        };
+                        if(name){
+                           item:["data_self_"+i] 
+                        }
+                        if(indexName){
+
+                        }
+                    }
+                    //Object
+                    else {
+
+                    }
+                }
+                return index;
+            };
+            ContextHandler.prototype.toNext = function (key) {
+
+            };
+            ContextHandler.prototype.endLoop = function (key) {
+
+            };
+
+            //str必须为非空
+            var utils = {
+                spaceCut: function (str) {
+                    return str.match(/(\s)*([^\s](?:.|\s)*)?/);
+                }
+            };
+            console.log(utils.spaceCut("123"));
+        })
+    </script>
+</body>
+
+</html>
