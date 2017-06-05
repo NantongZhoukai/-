@@ -7,24 +7,25 @@
 </head>
 
 <body>
-    #写一个模板生成引擎 ##代码主要包含3块功能 
+    #写一个模板生成引擎
+     ##代码主要包含3块功能 
     - treeObjectHandler 将js模板或者html模板解析成一个treeObject treeObject 主要有4种类型的数据 
-    -- eval型 
-    -- if型 
-    -- loop型 
-    -- 最基础的 sting型 
+    - - eval型 
+    - - if型 
+    - - loop型 
+    - - 最基础的 sting型 
     - conextHandler 表达式操作的环境 对面暴露如下接扣 
-    -- setContext 基础上下文设置 
-    -- eval(arg) 根据arg执行 返回 (执行的this是 conextHandler.context
+    - - setContext 基础上下文设置 
+    - - eval(arg) 根据arg执行 返回 (执行的this是 conextHandler.context
     需要对一些赋值的 eval 进行简单的包装 桥接 数据 ) 
-    -- 然而我们需要遍历 list 或者 Object 额外有3个接口 
-    --- startLoop(item,name,indexName,filter) #### 这里的item
+    - - 然而我们需要遍历 list 或者 Object 额外有3个接口 
+    - - - startLoop(item,name,indexName,filter) #### 这里的item
     可以是[1,2,3] 可以是 {name:'zk',age:13} 可以是 {{item}} (原有context中的对象) 暂定先不支持混合 为空直接跳过集合遍历 name 指的是 每个对象的 名称 可以用 _ 表示 不设置 可以用
     '或者 "包裹 如果没有以空格分割 indexName 指的是 每个对象对于序号的名称 可以用 _表示不设置 可以用 '或者 "包裹 如果没有以空格分割 filter 指的是需要过滤的集合 我们可以这么写 this.name == '1'
     或者 this.name eq '1 那么 在[1,2,3] 这个集合 只会遍历到 1 内部用一个 contextDetail 来维护 key 是 一个自增的 u32数据 所以 用 eval 对数据进行赋值时 我们禁止使用 数字开头的标识
     列如 this.123=1; 1abc=3; 
-    --- toNext(key) ### 这里的key 是 startLoop 返回的对于一个list的标识 标识循环到下个元素 
-    --- endLoop(key) ### 同上 结束循环 暂时不支持
+    - - - toNext(key) ### 这里的key 是 startLoop 返回的对于一个list的标识 标识循环到下个元素 
+    - - - endLoop(key) ### 同上 结束循环 暂时不支持
     break 指定层次的 loop (因为 这需要在初始化 loop时指定更多的参数 ,也不太常用) 
     - transformer 借助 treeObjectHandler 将treeObjectData 转换为 html 代码的场所 
     -------------------------------
@@ -57,8 +58,8 @@
     </script>
     <script src="require.js"></script>
     <script>
-        require(['jquery', 'lazy'], function ($, Ø) {
-            var content = $('#content').html()
+        require(["jquery", "lazy"], function ($, Ø) {
+            var content = $("#content").html()
 
             var TreeDataCreator = function () {
                 this.treeData = {};
@@ -91,7 +92,7 @@
                     if (!remainStr) {
                         return false;
                     }
-                    if ("[" || "{" === remainStr.charAt(0)) {
+                    if ("[" === remainStr.charAt(0) || "{" === remainStr.charAt(0)) {
                         try {
                             return this.eval(remainStr);
                         } catch (e) {
@@ -102,32 +103,34 @@
                     }
                 };
             };
-            //eval:
-            // type 为0 表示非取值操作 为1 表示 取值操作
-            //在type 卫 0是 我们需要对赋值表达式进行判断 不能进行 数字开头的赋值运算
-            // 也要对 不在 this 上的赋值操作进行桥接
-            //先对表达式 的单双引号进行处理
-            //假如满足 [this]?[0-9]+[a-zA-Z0-9\.]+ 那么不是真确的表达式
-            // 假如表达式 满足  ^[^this]([a-zA-Z0-9\.\'\"])+[\s]*=  那么就应该是不是以this 数字开头的赋值运算 我们在前面加上this
             ContextHandler.prototype.eval = function (expression, type) {
                 expression = expression.trim();
+                //表示取值操作
                 if (type === 1) {
                     var detailData;
                     //假如是 dataExpression
                     if (detailData = contextDetail[expression]) {
-
+                        if (detailData.type === "name") {
+                            return contextDetail[detailData.item].data;
+                        } else if (detailData.type === "index") {
+                            return contextDetail[detailData.item].index;
+                        }
                     } else {
-                        return (function(){
-                            eval("this" + expression)
+                        return (function () {
+                            eval("this." + expression)
                         }.bind(this.context))();
                     }
-                } else {
-
+                }
+                //表示 其他 操作 (TODO:对于this.11=1)这种类型的赋值需要抛出异常
+                else {
+                    (function () {
+                        eval(expression)
+                    }.bind(this.context))();
                 }
 
             };
             ContextHandler.prototype.startLoop = function (dataExpression, name, indexName, filter) {
-                var index = ++index;
+                var index = ++this.index;
                 var expressionResult = this.listDataAnalysis(dataExpression);
                 if (!expressionResult) {
                     return false;
@@ -141,17 +144,21 @@
                         this.contextDetail[i] = {
                             iterator: expressionResult[Symbol.iterator](),
                             //这里只记录 循环有效的index
-                            index: 0
+                            index: 0,
+                            data: this.iterator.next().value,
+                            filter: filter,
+                            name: name,
+                            indexName: indexName
                         };
                         if (name) {
                             this.contextDetail[name] = {
-                                type: 'name',
+                                type: "name",
                                 item: i
                             }
                         };
                         if (indexName) {
                             this.contextDetail[indexName] = {
-                                type: 'index',
+                                type: "index",
                                 item: i
                             }
                         }
@@ -164,10 +171,44 @@
                 return index;
             };
             ContextHandler.prototype.toNext = function (key) {
+                var item = this.contextDetail[key];
+                if (!item) return false;
+                if (item.filter) {
+                    var next = item.iterator.next();
+                    if (next.done) {
+                        this.endLoop(key);
+                        return false;
+                    } else {
+                        item.data = next.value;
+                        if (this.eval(filter) !== true) {
+                            this.toNext(key);
+                        } else {
 
+                            item.index++;
+                        }
+                    }
+
+                } else {
+                    var next = item.iterator.next();
+                    if (next.done) {
+                        this.endLoop(key);
+                        return false;
+                    } else {
+                        item.index++;
+                        item.data = next.value;
+                    }
+                }
+                return true;
             };
             ContextHandler.prototype.endLoop = function (key) {
-
+                var item = this.contextDetail[key];
+                if (item.name) {
+                    delete this.contextDetail[item.name];
+                }
+                if (item.indexName) {
+                    delete this.contextDetail[item.indexName];
+                }
+                delete this.contextDetail[key];
             };
 
         })
