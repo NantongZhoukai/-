@@ -174,33 +174,45 @@
                         expressionResult = this.eval("this." + expressionResult);
                     };
                     //List
+                    var iterator;
                     if (expressionResult instanceof Array) {
-                        this.contextDetail[i] = {
-                            iterator: expressionResult[Symbol.iterator](),
-                            //这里只记录 循环有效的index
-                            index: 0,
-                            data: this.iterator.next().value,
-                            filter: filter,
-                            name: name,
-                            indexName: indexName
-                        };
-                        if (name) {
-                            this.contextDetail[name] = {
-                                type: "name",
-                                item: i
-                            }
-                        };
-                        if (indexName) {
-                            this.contextDetail[indexName] = {
-                                type: "index",
-                                item: i
-                            }
+                        iterator = expressionResult[Symbol.iterator]();
+                    } else if (expressionResult instanceof Object) {
+                        iterator = {
+                            next: function () {
+                                this.index++;
+                                return {
+                                    done: this.index >= this.data.length,
+                                    value: this.data[this.dataKeys[this.index >= this.data.length ? (data.length - 1) : this.index]]
+                                }
+                            },
+                            dataKeys: expressionResult.keys(),
+                            data: expressionResult,
+                            index: -1
                         }
                     }
-                    //Object
-                    else {
-
+                    this.contextDetail[i] = {
+                        iterator: iterator,
+                        //这里只记录 循环有效的index
+                        index: 0,
+                        data: this.iterator.next().value,
+                        filter: filter,
+                        name: name,
+                        indexName: indexName
+                    };
+                    if (name) {
+                        this.contextDetail[name] = {
+                            type: "name",
+                            item: i
+                        }
+                    };
+                    if (indexName) {
+                        this.contextDetail[indexName] = {
+                            type: "index",
+                            item: i
+                        }
                     }
+
                 }
                 return index;
             };

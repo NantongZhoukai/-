@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+</head>
+
+<body>
+    <script>
+        var ContextHandler = function (context) {
+            this.context = context;
+            this.contextDetail = {};
+            this.index = 0;
+            this.listDataAnalysis = function (dataExpression) {
+                if (!dataExpression) {
+                    return false;
+                }
+                var cuteSpaceResult = dataExpression.match(/(\s)*([^\s](?:.|\s)*)?/);
+                var remainStr = cuteSpaceResult[2];
+                if (!remainStr) {
+                    return false;
+                }
+                if ("[" === remainStr.charAt(0) || "{" === remainStr.charAt(0)) {
+                    try {
+                        return this.eval(remainStr);
+                    } catch (e) {
+                        return false;
+                    }
+                } else {
+                    return remainStr;
+                }
+            };
+        };
+        ContextHandler.prototype.eval = function (expression) {
+            expression = expression.trim();
+            (function () {
+                eval(expression)
+            }.bind(this.context))();
+        };
+        ContextHandler.prototype.get = function (expression) {
+            expression = expression.trim();
+            //表示取值操作
+            var detailData;
+            //假如是 dataExpression
+            if (detailData = this.contextDetail[expression]) {
+                if (detailData.type === "name") {
+                    return this.contextDetail[detailData.item].data;
+                } else if (detailData.type === "index") {
+                    return this.contextDetail[detailData.item].index;
+                }
+            } else {
+                return (function () {
+                    return eval("this." + expression)
+                }.bind(this.context))();
+            }
+        };
+        ContextHandler.prototype.startLoop = function (dataExpression, name, indexName, filter) {
+            var index = this.index;
+            var expressionResult = this.listDataAnalysis(dataExpression);
+            if (!expressionResult) {
+                return false;
+            } else {
+                //说明是原有引用
+
+                if (typeof expressionResult === "string") {
+                    expressionResult = this.get(expressionResult);
+                };
+                //List
+                var iterator;
+                if (Object.prototype.toString.call(expressionResult) === "[object Array]") {
+                    iterator = expressionResult[Symbol.iterator]();
+                } else if (Object.prototype.toString.call(expressionResult) === "[object Object]") {
+                    debugger;
+                    iterator = {
+                        next: function () {
+                            this.index++;
+                            return {
+                                done: this.index < this.data.length - 1,
+                                value: this.data[this.dataKeys[this.index >= this.data.length ? (data.length - 1) : this.index]]
+                            }
+                        },
+                        dataKeys: Object.keys(expressionResult),
+                        data: expressionResult,
+                        index: -1
+                    }
+                }
+                console.log(iterator)
+                this.contextDetail[index] = {
+                    iterator: iterator,
+                    //这里只记录 循环有效的index
+                    index: 0,
+                    data: null,
+                    filter: filter,
+                    name: name,
+                    indexName: indexName
+                };
+                if (name) {
+                    this.contextDetail[name] = {
+                        type: "name",
+                        item: index
+                    }
+                };
+                if (indexName) {
+                    this.contextDetail[indexName] = {
+                        type: "index",
+                        item: index
+                    }
+                }
+
+            }
+            return index++;
+        };
+        ContextHandler.prototype.toNext = function (key) {
+            debugger;
+            var item = this.contextDetail[key];
+            if (!item) return false;
+            if (item.filter) {
+                var next = item.iterator.next();
+                if (next.done) {
+                    this.endLoop(key);
+                    return false;
+                } else {
+                    item.data = next.value;
+                    if (this.eval(filter) !== true) {
+                        this.toNext(key);
+                    } else {
+                        item.index++;
+                    }
+                }
+
+            } else {
+                var next = item.iterator.next();
+                if (next.done) {
+                    this.endLoop(key);
+                    return false;
+                } else {
+                    item.index++;
+                    item.data = next.value;
+                }
+            }
+            return true;
+        };
+        ContextHandler.prototype.endLoop = function (key) {
+            var item = this.contextDetail[key];
+            if (item.name) {
+                delete this.contextDetail[item.name];
+            }
+            if (item.indexName) {
+                delete this.contextDetail[item.indexName];
+            }
+            delete this.contextDetail[key];
+        };
+
+        var contextHandler = new ContextHandler({ list: [1, 2, 3], name: 'zhoukai' });
+        contextHandler.eval("this.name2='cqt'");
+        var name2 = contextHandler.get("name2");
+        console.log(name2)
+        contextHandler.eval("console.log(this)");
+        contextHandler.eval("this.name1={a:1,b:2}");
+        contextHandler.eval("console.log(this)");
+        var index = contextHandler.startLoop("list", 'item', 'index', null);
+        console.log(contextHandler.toNext(index));
+        console.log(contextHandler.get("item"));
+        console.log(contextHandler.get("index"));
+        console.log(contextHandler.toNext(index));
+        console.log(contextHandler.get("item"));
+        console.log(contextHandler.get("index"));
+        console.log(contextHandler.toNext(index));
+        console.log(contextHandler.get("item"));
+        console.log(contextHandler.get("index"));
+        console.log(contextHandler.toNext(index));
+        var index = contextHandler.startLoop("name1", 'item', 'index', null);
+        console.log(contextHandler.toNext(index));
+        console.log(contextHandler.get("item"));
+        console.log(contextHandler.get("index"));
+        console.log(contextHandler.toNext(index));
+        console.log(contextHandler.get("item"));
+        console.log(contextHandler.get("index"));
+        console.log(contextHandler.toNext(index));
+        console.log(contextHandler.get("item"));
+        console.log(contextHandler.get("index"));
+    </script>
+</body>
+
+</html>
