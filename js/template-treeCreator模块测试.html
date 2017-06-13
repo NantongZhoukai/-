@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+</head>
+
+<body>
+    <script type="text/html">
+
+    </script>
+    <script src="require.js"></script>
+    <script>
+        var content = `<%each> <%endEach>`;
+        var treeObject = [];
+
+        var rootStack = [];
+        var rootStack_addNext = function (wrappedItem) {
+            rootStack.pop();
+            rootStack.push(wappedItem);
+        };
+
+        var rootStack_addChild = function (wrappedItem) {
+            rootStack.push(wappedItem);
+        };
+
+        var rootStack_pop = function () {
+            rootStack.pop();
+        };
+        var rootStack_setType = function (type) {
+            rootStack[rootStack.length - 1].type = type;
+        }
+        var rootStack_getRoot = function () {
+            return rootStack[rootStack.length - 1].item;
+        };
+        var insert = function (item, condition) {
+            var lastRoot = rootStack_getRoot();
+            if (lastRoot.type === "each") {
+                lastRoot.childs.push(item);
+            } else if (lastRoot.type === "if") {
+                var items = lastRoot.caseWhen;
+                if (condition) {
+                    items[items.length - 1].push({
+                        condition: condition,
+                        item: [item]
+                    })
+                } else {
+                    items[items.length - 1].item.push(item);
+                }
+            } else if (lastRoot.type === "else") {
+                lastRoot.default.push(item);
+            } else {
+                lastRoot.push(item);
+            }
+        };
+        var insertstr = function (remainStr) {
+            insert(remainStr);
+        };
+        var startEach = function (dataExpression, name, index, filter) {
+            var item = {
+                detail: {
+                    index: index,
+                    name: name,
+                    filter: filter,
+                    dataExpression: dataExpression
+                },
+                childs: []
+            };
+            insert(item);
+            rootStack_addChild({
+                type: 'each',
+                item: item
+            });
+        };
+        var endEach = function (item) {
+            rootStack_pop();
+        };
+        var startIf = function (condition) {
+            var item = {
+                caseWhen: [
+
+                ],
+                default: []
+            };
+            insert(item,condition);
+        };
+        var startNextIf = function (condition) {
+            insert(item,condition);
+        };
+        var startNextElse = function () {
+            rootStack_setType('else');
+            insert(item);
+        };
+        var endIf = function () {
+            rootStack_pop();
+        };
+    </script>
+</body>
+
+</html>
